@@ -5,3 +5,6 @@ __pycache__/
 *.log
 data/*.csv
 logs/
+config/ed25519_private.pem
+config/ed25519_public.pem
+config/testnet_config.json
