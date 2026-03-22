@@ -1,0 +1,7 @@
+# Trading bot .gitignore
+config/testnet_config.json
+*.pyc
+__pycache__/
+*.log
+data/*.csv
+logs/
