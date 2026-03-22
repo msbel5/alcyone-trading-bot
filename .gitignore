@@ -1,10 +1,43 @@
-# Trading bot .gitignore
-config/testnet_config.json
-*.pyc
+# Byte-compiled / optimized / DLL files
 __pycache__/
-*.log
-data/*.csv
-logs/
+*.py[cod]
+*$py.class
+
+# Virtual environment
+venv/
+env/
+ENV/
+
+# Private keys (CRITICAL)
 config/ed25519_private.pem
-config/ed25519_public.pem
+config/*_private.pem
+*.pem
+*.key
+
+# API credentials
 config/testnet_config.json
+.env
+
+# Data files
+data/*.csv
+
+# Logs
+logs/*.jsonl
+*.log
+
+# Test coverage
+.coverage
+htmlcov/
+.pytest_cache/
+
+# IDE
+.vscode/
+.idea/
+
+# Distribution
+*.egg-info/
+dist/
+build/
+
+# Optimization results
+optimization_results.csv
