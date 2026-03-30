@@ -41,3 +41,22 @@ build/
 
 # Optimization results
 optimization_results.csv
+
+# ML models (large binary files)
+ml/models/*.pt
+ml/models/*.pkl
+ml/models/*.onnx
+
+# Historical data (large CSVs, re-downloadable)
+data/historical/*.csv
+data/features/*.csv
+
+# Virtual env
+.venv/
+
+# Optimization results
+optimization_results.csv
+
+# Heartbeat
+heartbeat.log
+.heartbeat_check.py

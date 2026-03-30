@@ -151,7 +151,7 @@ if __name__ == '__main__':
     trader = LiveTrader(
         api_key=config['api_key'],
         private_key_path=config['private_key_path'],
-        dry_run=True,  # Change to False for live trading
+        dry_run=False,  # LIVE TRADING: dry_run=False
         telegram_enabled=True
     )
     

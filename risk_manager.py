@@ -8,7 +8,7 @@ Handles position sizing, stop-loss, take-profit, and max drawdown limits.
 class RiskManager:
     def __init__(
         self,
-        max_position_size=0.95,  # Use max 95% of balance per trade
+        max_position_size=0.01,  # Use max 1% of balance per trade
         stop_loss_pct=2.0,       # Stop loss at -2%
         take_profit_pct=5.0,     # Take profit at +5%
         max_drawdown_pct=10.0    # Max portfolio drawdown before pause
@@ -108,7 +108,7 @@ class RiskManager:
 if __name__ == '__main__':
     # Test risk manager
     rm = RiskManager(
-        max_position_size=0.95,
+        max_position_size=0.01,  # Match production default
         stop_loss_pct=2.0,
         take_profit_pct=5.0,
         max_drawdown_pct=10.0
