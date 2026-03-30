@@ -191,30 +191,33 @@ def run():
                 except Exception as e:
                     log.error(f"{symbol} tick error: {e}")
 
+            # ── Update dashboard every tick ──
+            try:
+                dash_positions = {}
+                total_value = 0
+                for s, t in trackers.items():
+                    p = float(adapter.get_symbol_price(s).get("price", 0))
+                    val = t.position * p if t.position > 0 else 0
+                    total_value += val
+                    dash_positions[s] = {
+                        "amount": t.position,
+                        "value": val,
+                        "pnl_pct": ((p / t.entry_price) - 1) * 100 if t.entry_price and t.position > 0 else 0,
+                        "entry_price": t.entry_price or 0,
+                        "trailing_sl": t.trailing_stop.get_sl() or 0,
+                    }
+                update_dashboard_state(
+                    dash_positions, [], total_value - BALANCE_CAP, 0,
+                    {"XGBoost": {"status": "active"}, "GRU": {"status": "active"}, "CryptoBERT": {"status": "active"}},
+                    f"{iteration * 5}min"
+                )
+            except Exception:
+                pass
+
             # ── Hourly heartbeat ──
             if iteration % 12 == 0:
                 positions = sum(1 for t in trackers.values() if t.position > 0)
                 log.info(f"Heartbeat | iter={iteration} | {positions}/{len(SYMBOLS)} open")
-
-                # Update dashboard state
-                try:
-                    dash_positions = {}
-                    for s, t in trackers.items():
-                        p = float(adapter.get_symbol_price(s).get("price", 0))
-                        dash_positions[s] = {
-                            "amount": t.position,
-                            "value": t.position * p if t.position > 0 else 0,
-                            "pnl_pct": ((p / t.entry_price) - 1) * 100 if t.entry_price and t.position > 0 else 0,
-                            "entry_price": t.entry_price or 0,
-                            "trailing_sl": t.trailing_stop.get_sl() or 0,
-                        }
-                    update_dashboard_state(
-                        dash_positions, [], 0, 0,
-                        {"XGBoost": {"status": "active"}, "GRU": {"status": "active"}, "CryptoBERT": {"status": "active"}},
-                        f"{iteration * 5}min"
-                    )
-                except Exception:
-                    pass
 
             # ── Daily report at 23:00 ──
             if current_hour == 23 and last_report_hour != 23:
