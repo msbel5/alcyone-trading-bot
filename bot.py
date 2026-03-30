@@ -207,7 +207,7 @@ def run():
                         "trailing_sl": t.trailing_stop.get_sl() or 0,
                     }
                 update_dashboard_state(
-                    dash_positions, [], total_value - BALANCE_CAP, 0,
+                    dash_positions, [], total_value - BALANCE_CAP if total_value > 0 else 0, 0,
                     {"XGBoost": {"status": "active"}, "GRU": {"status": "active"}, "CryptoBERT": {"status": "active"}},
                     f"{iteration * 5}min"
                 )
