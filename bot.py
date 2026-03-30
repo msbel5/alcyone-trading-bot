@@ -45,7 +45,8 @@ SYMBOLS = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT", "XRPUSDT", "DOGEUSDT", "A
 BALANCE_CAP = 100.0
 PER_COIN_ALLOC = BALANCE_CAP / len(SYMBOLS)
 DEFAULT_POSITION_PCT = 0.90
-CHECK_INTERVAL = 300  # 5 minutes
+CHECK_INTERVAL = 5  # seconds to wait AFTER tick completes (adaptive speed)
+COPILOT_API_URL = "http://localhost:4141/v1"
 
 shutdown_requested = False
 
@@ -215,7 +216,7 @@ def run():
                 pass
 
             # ── Hourly heartbeat ──
-            if iteration % 12 == 0:
+            if iteration % 180 == 0:  # ~hourly at 20s/tick
                 positions = sum(1 for t in trackers.values() if t.position > 0)
                 log.info(f"Heartbeat | iter={iteration} | {positions}/{len(SYMBOLS)} open")
 
@@ -304,7 +305,7 @@ def _tick_coin_v2(adapter, tracker, notifier, trade_logger,
         for col in ["open", "high", "low", "close", "volume"]:
             df[col] = df[col].astype(float)
 
-        # ML ensemble prediction
+        # ML ensemble + Copilot AI + Twitter + Whale
         try:
             from ml.data_pipeline import add_features
             from ml.ensemble import get_ensemble
@@ -312,16 +313,45 @@ def _tick_coin_v2(adapter, tracker, notifier, trade_logger,
             df_features = add_features(df.copy())
             headlines = get_headlines_for_symbol(symbol)
 
-            # Add Twitter sentiment
+            # Twitter sentiment (Nitter RSS + CryptoBERT)
             tw_score = twitter.get_sentiment(symbol)
 
-            # Add whale data
+            # Whale tracking (on-chain data)
             whale = whale_tracker.check_whale_activity(symbol)
             whale_signal = whale.get("signal", 0)
 
-            # Combine ML + Twitter + Whale
+            # Copilot AI sentiment (GPT-4.1 on Pi, FREE)
+            copilot_score = 0.0
+            try:
+                import requests as _req
+                news_text = "; ".join(headlines[:3]) if headlines else "no news"
+                resp = _req.post(f"{COPILOT_API_URL}/chat/completions", json={
+                    "model": "gpt-4.1",
+                    "messages": [
+                        {"role": "system", "content": "You are a crypto trading analyst. Reply ONLY with a JSON: {\"signal\": -1.0 to 1.0, \"reason\": \"one sentence\"}. Positive=bullish, negative=bearish, 0=neutral."},
+                        {"role": "user", "content": f"Symbol: {symbol}, Price: ${price:,.2f}, RSI: {df['rsi'].iloc[-1] if 'rsi' in df else 50:.0f}, News: {news_text[:200]}"}
+                    ],
+                    "max_tokens": 60, "temperature": 0.1
+                }, timeout=8)
+                if resp.status_code == 200:
+                    import json as _json
+                    text = resp.json()["choices"][0]["message"]["content"].strip()
+                    if text.startswith("```"): text = text.split("\n",1)[-1].rsplit("```",1)[0]
+                    parsed = _json.loads(text)
+                    copilot_score = float(parsed.get("signal", 0))
+            except Exception:
+                pass
+
+            # ML models (XGBoost + GRU + CryptoBERT local)
             ml_result = get_ensemble().predict(symbol, df_features, headlines, f"{symbol} ${price:,.2f}")
-            combined_ml = ml_result.get("score", 0) * 0.6 + tw_score * 0.25 + whale_signal * 0.15
+
+            # Combine all signals (7 sources!)
+            combined_ml = (
+                ml_result.get("score", 0) * 0.35 +  # Local ML models
+                copilot_score * 0.25 +                # GPT-4.1 AI opinion
+                tw_score * 0.20 +                     # Twitter sentiment
+                whale_signal * 0.20                   # On-chain whale data
+            )
             tracker.strategy.set_ml_signal(combined_ml)
         except Exception as ml_err:
             log.debug(f"{symbol} ML skipped: {ml_err}")
