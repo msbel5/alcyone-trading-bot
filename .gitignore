@@ -1,62 +1,47 @@
-# Byte-compiled / optimized / DLL files
+# Python
 __pycache__/
 *.py[cod]
 *$py.class
+*.egg-info/
+dist/
+build/
 
-# Virtual environment
+# Virtual environments
 venv/
+.venv/
 env/
-ENV/
 
-# Private keys (CRITICAL)
+# Private keys & credentials (NEVER commit)
 config/ed25519_private.pem
 config/*_private.pem
+config/testnet_config.json
 *.pem
 *.key
-
-# API credentials
-config/testnet_config.json
 .env
 
-# Data files
-data/*.csv
+# ML models (large binaries, reproducible via training)
+ml/models/*.pt
+ml/models/*.pkl
+ml/models/*.onnx
+
+# Data (large, re-downloadable)
+data/historical/*.csv
+data/features/*.csv
 
 # Logs
-logs/*.jsonl
+logs/
 *.log
-
-# Test coverage
-.coverage
-htmlcov/
-.pytest_cache/
+*.jsonl
 
 # IDE
 .vscode/
 .idea/
 
-# Distribution
-*.egg-info/
-dist/
-build/
+# OS
+.DS_Store
+Thumbs.db
 
-# Optimization results
-optimization_results.csv
-
-# ML models (large binary files)
-ml/models/*.pt
-ml/models/*.pkl
-ml/models/*.onnx
-
-# Historical data (large CSVs, re-downloadable)
-data/historical/*.csv
-data/features/*.csv
-
-# Virtual env
-.venv/
-
-# Optimization results
-optimization_results.csv
-
-# Heartbeat
-heartbeat.log
-.heartbeat_check.py
+# Coverage
+.coverage
+htmlcov/
+.pytest_cache/

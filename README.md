@@ -5,107 +5,114 @@ Multi-asset crypto trading bot with 6-layer ML strategy. Runs 24/7 on Raspberry 
 ## Architecture
 
 ```
-7 Coins (BTC/ETH/SOL/BNB/XRP/DOGE/AVAX)
+Market Data (Binance Testnet, 7 coins)
     |
     v
-ProStrategy (6 layers, weighted voting)
-    |
-    +-- Layer 1: Trend (EMA 12/26 + ADX)
-    +-- Layer 2: Momentum (RSI + MACD + Stochastic)
-    +-- Layer 3: Volatility (Bollinger Bands + ATR dynamic SL/TP)
-    +-- Layer 4: Volume (OBV + spike detection)
-    +-- Layer 5: Sentiment (Fear & Greed Index)
-    +-- Layer 6: ML (XGBoost + GRU + CryptoBERT)
-    |
-    v
-Risk Manager (dynamic SL/TP, circuit breaker)
+ProStrategy (6 signal layers, weighted voting)
+    |-- L1: Trend (EMA 12/26 + ADX strength)
+    |-- L2: Momentum (RSI + MACD + Stochastic)
+    |-- L3: Volatility (Bollinger Bands + ATR)
+    |-- L4: Volume (OBV trend + spike detection)
+    |-- L5: Sentiment (Fear & Greed Index)
+    |-- L6: ML (XGBoost + GRU + CryptoBERT local)
     |
     v
-Binance Testnet (real orders, fake money)
+Filters
+    |-- Multi-timeframe (4h trend confirmation)
+    |-- Correlation (max 3 correlated positions)
+    |-- Grid mode (sideways market, ADX < 20)
     |
     v
-Telegram Notifications (trade alerts, daily reports)
+Risk Management
+    |-- Trailing stop (ATR-based, never decreases)
+    |-- Kelly criterion (dynamic position sizing)
+    |-- Circuit breaker (15% max drawdown)
+    |
+    v
+Execution (Binance Testnet API)
+    |
+    v
+Monitoring
+    |-- Telegram notifications (real-time)
+    |-- HTML dashboard
+    |-- Weekly auto-retrain
 ```
+
+## Coins
+BTC, ETH, SOL, BNB, XRP, DOGE, AVAX
 
 ## Quick Start
 
 ```bash
-# Install dependencies
-cd /path/to/trading
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt  # TODO: create this
+# Setup
+python3 -m venv .venv && source .venv/bin/activate
+pip install torch --index-url https://download.pytorch.org/whl/cpu
+pip install pandas scikit-learn xgboost transformers feedparser requests cryptography
 
-# Download historical data (one-time)
+# Download data + train models (one-time, ~30min)
 python3 ml/download_historical.py
-
-# Train ML models (one-time, ~30min on Pi)
 python3 ml/xgboost_model.py
 python3 ml/gru_model.py
 
-# Run the bot
-python3 multi_asset_bot.py
+# Backtest
+python3 backtester.py
 
-# Or install as systemd service (recommended)
-cp trading-bot.service ~/.config/systemd/user/
-systemctl --user enable trading-bot.service
-systemctl --user start trading-bot.service
+# Run
+python3 bot.py
+
+# Or as systemd service
+systemctl --user enable trading-bot
+systemctl --user start trading-bot
 ```
-
-## Configuration
-
-- Balance cap: $100 (configurable in multi_asset_bot.py)
-- Per-coin allocation: ~$14.28 (7-way split)
-- Position size: 90% of per-coin allocation
-- Check interval: 5 minutes
-- Risk: 2% SL, 5% TP, 15% max drawdown
-
-## ML Models
-
-| Model | Type | Runs On | Accuracy |
-|-------|------|---------|----------|
-| XGBoost | Classifier | Pi (local) | 46% avg |
-| GRU | Neural Net | Pi (local) | Training... |
-| CryptoBERT | Sentiment | Pi (local) | Bullish/Bearish/Neutral |
-| Fear & Greed | Index API | Remote | 0-100 scale |
-| News Keywords | Rule-based | Pi (local) | Keyword matching |
 
 ## Files
 
 ```
-trading/
-  multi_asset_bot.py     # Main 24/7 bot (systemd service)
-  bot_service.py         # Single-asset bot (legacy)
-  strategies/
-    pro_strategy.py      # 6-layer ProStrategy
-    enhanced_strategy.py # Intermediate strategy
-    ma_crossover.py      # Original simple EMA
-  ml/
-    data_pipeline.py     # Feature engineering
-    download_historical.py # Data downloader
-    gru_model.py         # GRU training + inference
-    xgboost_model.py     # XGBoost training + inference
-    local_sentiment.py   # CryptoBERT on Pi
-    hf_sentiment.py      # HuggingFace API (backup)
-    copilot_sentiment.py # Copilot API sentiment (backup)
-    news_parser.py       # RSS feed parser
-    ensemble.py          # Model combiner
-  risk_manager.py        # SL/TP/drawdown
-  telegram_notifier.py   # Real Telegram messages
-  trade_logger.py        # Trade logging
-  balance_cap.py         # Simulated balance limit
-  config/                # API keys (gitignored)
-  data/                  # Historical + features (gitignored)
-  logs/                  # Trade logs (gitignored)
+bot.py                    Main 24/7 trading bot
+backtester.py             Backtest framework + trailing stop
+filters.py                Multi-timeframe + correlation + Kelly criterion
+data_sources.py           Twitter + whale tracking + grid bot + dashboard + auto-retrain
+live_trader.py            Binance API wrapper
+risk_manager.py           Stop-loss / take-profit / drawdown
+telegram_notifier.py      Telegram Bot API notifications
+trade_logger.py           Trade logging to JSONL
+strategies/
+    pro_strategy.py       6-layer ProStrategy (main)
+ml/
+    data_pipeline.py      Feature engineering (15 indicators)
+    download_historical.py Data downloader (Binance public API)
+    gru_model.py          GRU neural network
+    xgboost_model.py      XGBoost classifier
+    local_sentiment.py    CryptoBERT on Pi (no API cost)
+    hf_sentiment.py       HuggingFace API (backup)
+    copilot_sentiment.py  GPT-4.1 via Copilot API (backup)
+    news_parser.py        RSS feed parser
+    ensemble.py           Model combiner
+binance_testnet/
+    adapter_binance.py    Binance REST + Ed25519 signing
+config/                   API keys (gitignored)
+data/                     Historical + features (gitignored)
+logs/                     Trade logs (gitignored)
+docs/
+    PRD_ml_prediction_layer.md
+    PRD_trading_improvements.md
 ```
+
+## Backtest Results (8 months, $100)
+
+| Coin | Trailing Stop | Win Rate | Sharpe |
+|------|:---:|:---:|:---:|
+| BTC | +18.7% | 52% | 1.59 |
+| BNB | +10.4% | 53% | 0.79 |
+| DOGE | +8.5% | 37% | 0.56 |
+| SOL | -3.6% | 46% | -0.04 |
+| ETH | -4.4% | 42% | -0.11 |
+| XRP | -6.2% | 36% | -0.29 |
+| AVAX | -24.7% | 29% | -1.45 |
+| **Portfolio** | **-0.2%** | | |
 
 ## Security
 
-- Repo is PRIVATE
-- API keys in config/ (gitignored)
-- Private keys never committed (removed from history)
-- Testnet only — no real money without explicit flag
-
-## License
-
-Private project by msbel5 + Alcyone AI.
+- Repo is public, API keys are gitignored
+- Private keys never in repo
+- Testnet only — no real money without explicit code change

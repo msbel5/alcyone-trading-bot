@@ -24,8 +24,8 @@ from risk_manager import RiskManager
 from trade_logger import TradeLogger
 from telegram_notifier import TelegramNotifier
 from backtester import TrailingStop
-from sprint2_filters import MultiTimeframeFilter, CorrelationFilter, kelly_fraction
-from sprint4_data_sources import TwitterSentiment, WhaleTracker, GridBot, AutoRetrainer
+from filters import MultiTimeframeFilter, CorrelationFilter, kelly_fraction
+from data_sources import TwitterSentiment, WhaleTracker, GridBot, AutoRetrainer
 
 LOG_DIR = "/home/msbel/.openclaw/workspace/trading/logs"
 os.makedirs(LOG_DIR, exist_ok=True)

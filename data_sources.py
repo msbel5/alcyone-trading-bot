@@ -365,7 +365,7 @@ def test_all():
     print("  [PASS] Whale tracker structure")
 
     # Kelly criterion
-    from sprint2_filters import kelly_fraction
+    from filters import kelly_fraction
     k = kelly_fraction(0.55, 20.0, 15.0)
     assert 0 < k <= 0.25
     print(f"  [PASS] Kelly criterion: {k:.3f}")
@@ -393,12 +393,12 @@ def test_all():
     print("  [PASS] Auto-retrainer")
 
     # Multi-timeframe
-    from sprint2_filters import MultiTimeframeFilter
+    from filters import MultiTimeframeFilter
     mtf = MultiTimeframeFilter()
     print("  [PASS] Multi-timeframe filter")
 
     # Correlation
-    from sprint2_filters import CorrelationFilter
+    from filters import CorrelationFilter
     cf = CorrelationFilter()
     print("  [PASS] Correlation filter")
 
