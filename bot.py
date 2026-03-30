@@ -26,6 +26,7 @@ from telegram_notifier import TelegramNotifier
 from backtester import TrailingStop
 from filters import MultiTimeframeFilter, CorrelationFilter, kelly_fraction
 from data_sources import TwitterSentiment, WhaleTracker, GridBot, AutoRetrainer
+from dashboard import start_dashboard, update_dashboard_state
 
 LOG_DIR = "/home/msbel/.openclaw/workspace/trading/logs"
 os.makedirs(LOG_DIR, exist_ok=True)
@@ -131,6 +132,12 @@ def run():
     )
     log.info(f"Bot v2 started | {len(SYMBOLS)} coins | ${BALANCE_CAP}")
 
+    # Start dashboard web server
+    try:
+        start_dashboard(8085)
+    except Exception as e:
+        log.warning(f"Dashboard failed to start: {e}")
+
     iteration = 0
     last_report_hour = -1
     last_corr_update = 0
@@ -188,6 +195,26 @@ def run():
             if iteration % 12 == 0:
                 positions = sum(1 for t in trackers.values() if t.position > 0)
                 log.info(f"Heartbeat | iter={iteration} | {positions}/{len(SYMBOLS)} open")
+
+                # Update dashboard state
+                try:
+                    dash_positions = {}
+                    for s, t in trackers.items():
+                        p = float(adapter.get_symbol_price(s).get("price", 0))
+                        dash_positions[s] = {
+                            "amount": t.position,
+                            "value": t.position * p if t.position > 0 else 0,
+                            "pnl_pct": ((p / t.entry_price) - 1) * 100 if t.entry_price and t.position > 0 else 0,
+                            "entry_price": t.entry_price or 0,
+                            "trailing_sl": t.trailing_stop.get_sl() or 0,
+                        }
+                    update_dashboard_state(
+                        dash_positions, [], 0, 0,
+                        {"XGBoost": {"status": "active"}, "GRU": {"status": "active"}, "CryptoBERT": {"status": "active"}},
+                        f"{iteration * 5}min"
+                    )
+                except Exception:
+                    pass
 
             # ── Daily report at 23:00 ──
             if current_hour == 23 and last_report_hour != 23:
