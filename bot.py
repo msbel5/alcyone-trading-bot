@@ -146,6 +146,9 @@ def run():
     )
     log.info(f"Bot v2 started | {len(SYMBOLS)} coins | ${BALANCE_CAP}")
 
+    # Equity curve tracker (persists across ticks)
+    equity_curve = []
+
     # Start dashboard web server
     try:
         start_dashboard(8085)
@@ -227,8 +230,13 @@ def run():
                     if t.position > 0 and t.entry_price
                 )
                 open_count = sum(1 for t in trackers.values() if t.position > 0)
+                # Track equity: balance cap + current position values
+                portfolio_value = BALANCE_CAP + total_pnl
+                equity_curve.append(portfolio_value)
+                if len(equity_curve) > 500:
+                    equity_curve.pop(0)
                 update_dashboard_state(
-                    dash_positions, [],
+                    dash_positions, equity_curve,
                     round(total_pnl, 4),
                     0,
                     {
