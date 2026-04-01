@@ -101,8 +101,17 @@ def add_features(df: pd.DataFrame) -> pd.DataFrame:
     df["momentum_24h"] = close.pct_change(24).fillna(0)
 
     # ── Time features ──
-    df["hour"] = df.index.hour
-    df["day_of_week"] = df.index.dayofweek
+    # Time features — handle both timestamp and range index
+    if hasattr(df.index, "hour"):
+        df["hour"] = df.index.hour
+        df["day_of_week"] = df.index.dayofweek
+    elif "open_time" in df.columns:
+        ts = pd.to_datetime(df["open_time"], unit="ms", errors="coerce")
+        df["hour"] = ts.dt.hour.fillna(12).astype(int)
+        df["day_of_week"] = ts.dt.dayofweek.fillna(3).astype(int)
+    else:
+        df["hour"] = 12
+        df["day_of_week"] = 3
 
     return df
 

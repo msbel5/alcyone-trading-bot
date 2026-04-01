@@ -159,9 +159,10 @@ def predict_gru(symbol: str, recent_df: pd.DataFrame, feature_cols: list, lookba
 
     # Prepare input
     features = recent_df[feature_cols].values[-lookback:].astype(np.float32)
+    features = np.nan_to_num(features, nan=0.0)
     std[std == 0] = 1
     features = (features - mean) / std
-    x = torch.tensor(features).unsqueeze(0)
+    x = torch.tensor(features, dtype=torch.float32).unsqueeze(0)
 
     with torch.no_grad():
         logits = model(x)
