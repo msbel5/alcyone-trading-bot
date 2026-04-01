@@ -15,7 +15,7 @@ from pathlib import Path
 
 SYMBOLS = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT", "XRPUSDT", "DOGEUSDT", "AVAXUSDT"]
 INTERVAL = "1h"
-MONTHS_BACK = 8  # 8 months of data
+MONTHS_BACK = 24  # 8 months of data
 OUTPUT_DIR = Path("/home/msbel/.openclaw/workspace/trading/data/historical")
 BASE_URL = "https://api.binance.com"  # Mainnet public (no auth needed for klines)
 
