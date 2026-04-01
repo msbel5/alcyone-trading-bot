@@ -319,6 +319,10 @@ def _tick_coin_v2(adapter, tracker, notifier, trade_logger,
         for col in ["open", "high", "low", "close", "volume"]:
             df[col] = df[col].astype(float)
 
+        if len(df) < 30:
+            log.debug(f"{symbol}: not enough candles ({len(df)})"  )
+            return
+
         # ML ensemble + Copilot AI + Twitter + Whale
         try:
             from ml.data_pipeline import add_features

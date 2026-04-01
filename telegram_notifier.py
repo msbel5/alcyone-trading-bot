@@ -54,7 +54,7 @@ class TelegramNotifier:
 
     def notify_trade(self, action, price, amount, pnl=None, pnl_pct=None, reason=None):
         if action == "BUY":
-            msg = f"🟢 BUY executed\nPrice: ${price:,.2f}\nAmount: {amount:.5f} BTC (${amount*price:.2f})"
+            msg = f"🟢 BUY executed\nPrice: ${price:,.2f}\nAmount: {amount:.5f} (${amount*price:.2f})"
             self.send(msg, priority="normal")
         elif action == "SELL":
             emoji = "🟢" if pnl and pnl > 0 else "🔴"
