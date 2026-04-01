@@ -27,6 +27,7 @@ from backtester import TrailingStop
 from filters import MultiTimeframeFilter, CorrelationFilter, kelly_fraction
 from data_sources import TwitterSentiment, WhaleTracker, GridBot, AutoRetrainer
 from dashboard import start_dashboard, update_dashboard_state
+from position_store import save_positions, load_positions
 
 LOG_DIR = "/home/msbel/.openclaw/workspace/trading/logs"
 os.makedirs(LOG_DIR, exist_ok=True)
@@ -122,6 +123,18 @@ def run():
         return
 
     trackers = {sym: CoinTracker(sym) for sym in SYMBOLS}
+
+    # Restore positions from disk (survive restart)
+    saved = load_positions()
+    restored = 0
+    for sym, state in saved.items():
+        if sym in trackers and state.get("position", 0) > 0:
+            trackers[sym].position = state["position"]
+            trackers[sym].entry_price = state["entry_price"]
+            restored += 1
+            log.info(f"Restored {sym}: {state['position']} @ ${state['entry_price']}")
+    if restored:
+        log.info(f"Restored {restored} positions from disk")
 
     coin_names = ", ".join(s.replace("USDT", "") for s in SYMBOLS)
     notifier.send(
@@ -303,6 +316,7 @@ def _tick_coin_v2(adapter, tracker, notifier, trade_logger,
                 tracker.position = 0
                 tracker.entry_price = None
                 tracker.trailing_stop.reset()
+                save_positions(trackers)  # Persist to disk
             return
 
         # Check strategy SELL signal
@@ -422,6 +436,7 @@ def _tick_coin_v2(adapter, tracker, notifier, trade_logger,
             trend_4h = {1: "↑", -1: "↓", 0: "→"}.get(mtf_filter.get_trend(symbol), "?")
             log.info(f"BUY {coin} | {qty_str} @ ${price:,.2f} | RSI={rsi:.0f} ADX={adx:.0f} 4h={trend_4h} Kelly={tracker.position_pct:.0%}")
             notifier.notify_trade("BUY", price, amount)
+            save_positions(trackers)  # Persist to disk
 
     # ── SELL ──
     elif filtered_signal == -1 and tracker.position > 0:
@@ -438,6 +453,7 @@ def _tick_coin_v2(adapter, tracker, notifier, trade_logger,
             tracker.position = 0
             tracker.entry_price = None
             tracker.trailing_stop.reset()
+            save_positions(trackers)  # Persist to disk
 
 
 def _send_daily_report(trackers, notifier, adapter):
