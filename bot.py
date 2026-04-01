@@ -28,6 +28,7 @@ from filters import MultiTimeframeFilter, CorrelationFilter, kelly_fraction
 from data_sources import TwitterSentiment, WhaleTracker, GridBot, AutoRetrainer
 from dashboard import start_dashboard, update_dashboard_state
 from position_store import save_positions, load_positions
+from ml.onchain import get_onchain_signal
 
 LOG_DIR = "/home/msbel/.openclaw/workspace/trading/logs"
 os.makedirs(LOG_DIR, exist_ok=True)
@@ -356,9 +357,13 @@ def _tick_coin_v2(adapter, tracker, notifier, trade_logger,
             # Twitter sentiment (Nitter RSS + CryptoBERT)
             tw_score = twitter.get_sentiment(symbol)
 
-            # Whale tracking (on-chain data)
+            # Whale tracking (RSS-based)
             whale = whale_tracker.check_whale_activity(symbol)
             whale_signal = whale.get("signal", 0)
+
+            # On-chain metrics (mempool, fees, hashrate — FREE, no API key)
+            onchain = get_onchain_signal(symbol)
+            onchain_signal = onchain.get("signal", 0)
 
             # Copilot AI sentiment (GPT-4.1 on Pi, FREE)
             copilot_score = 0.0
@@ -385,12 +390,14 @@ def _tick_coin_v2(adapter, tracker, notifier, trade_logger,
             # ML models (XGBoost + GRU + CryptoBERT local)
             ml_result = get_ensemble().predict(symbol, df_features, headlines, f"{symbol} ${price:,.2f}")
 
-            # Combine all signals (7 sources!)
+            # Combine all signals (8 sources!)
             combined_ml = (
-                ml_result.get("score", 0) * 0.35 +  # Local ML models
-                copilot_score * 0.25 +                # GPT-4.1 AI opinion
-                tw_score * 0.20 +                     # Twitter sentiment
-                whale_signal * 0.20                   # On-chain whale data
+                ml_result.get("score", 0) * 0.30 +  # Local ML models (XGB+GRU+LGBM+CryptoBERT)
+                copilot_score * 0.20 +                # GPT-4.1 AI opinion
+                tw_score * 0.15 +                     # Twitter sentiment
+                whale_signal * 0.10 +                 # Whale Alert RSS
+                onchain_signal * 0.15 +               # On-chain (mempool, fees, hashrate)
+                0 * 0.10                              # Reserved for future data source
             )
             tracker.strategy.set_ml_signal(combined_ml)
         except Exception as ml_err:
