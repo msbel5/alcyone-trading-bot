@@ -2,6 +2,8 @@
 
 Scientific multi-asset crypto trading bot with 46 ML features, 9 signal layers, CNN-LSTM, CPCV, regime detection, and smart execution. Runs 24/7 on Raspberry Pi 5.
 
+<img width="1594" height="930" alt="image" src="https://github.com/user-attachments/assets/9f27e299-1fef-4ad0-9ddd-013f4afa24ae" />
+
 ## Architecture
 
 ```
