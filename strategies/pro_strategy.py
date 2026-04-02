@@ -32,9 +32,11 @@ class ProStrategy:
                  # Volume
                  obv_ema=20, volume_spike_mult=1.5,
                  # Weights
-                 weight_trend=0.20, weight_momentum=0.20,
-                 weight_volatility=0.12, weight_volume=0.12,
-                 weight_sentiment=0.16, weight_ml=0.20,
+                 weight_trend=0.15, weight_momentum=0.15,
+                 weight_volatility=0.10, weight_volume=0.08,
+                 weight_sentiment=0.10, weight_ml=0.18,
+                 weight_ichimoku=0.10, weight_patterns=0.07,
+                 weight_statistical=0.07,
                  # Thresholds
                  buy_threshold=0.40, sell_threshold=-0.40):
         # Trend params
@@ -65,8 +67,14 @@ class ProStrategy:
         self.weight_volume = weight_volume
         self.weight_sentiment = weight_sentiment
         self.weight_ml = weight_ml
-        # ML prediction signal (set externally by ensemble)
+        self.weight_ichimoku = weight_ichimoku
+        self.weight_patterns = weight_patterns
+        self.weight_statistical = weight_statistical
+        # External signals (set by bot before calculate_signals)
         self._ml_signal = 0.0
+        self._ichimoku_signal = 0.0
+        self._pattern_signal = 0.0
+        self._statistical_signal = 0.0
         # Signal thresholds
         self.buy_threshold = buy_threshold
         self.sell_threshold = sell_threshold
@@ -263,13 +271,21 @@ class ProStrategy:
 
         # Weighted composite score (6 layers)
         df["ml_score"] = self._ml_signal
+        df["ichimoku_score"] = self._ichimoku_signal
+        df["pattern_score"] = self._pattern_signal
+        df["statistical_score"] = self._statistical_signal
+
+        # 9-layer weighted composite
         df["composite"] = (
             df["trend_score"] * self.weight_trend +
             df["momentum_score"] * self.weight_momentum +
             df["volatility_score"] * self.weight_volatility +
             df["volume_score"] * self.weight_volume +
             sentiment * self.weight_sentiment +
-            self._ml_signal * self.weight_ml
+            self._ml_signal * self.weight_ml +
+            self._ichimoku_signal * self.weight_ichimoku +
+            self._pattern_signal * self.weight_patterns +
+            self._statistical_signal * self.weight_statistical
         )
 
         # Signal: 1 = buy, -1 = sell, 0 = hold
@@ -282,6 +298,15 @@ class ProStrategy:
         df.loc[weak_trend & (df["signal"] != 0), "signal"] = 0
 
         return df
+
+    def set_ichimoku_signal(self, signal: float):
+        self._ichimoku_signal = max(-1.0, min(1.0, float(signal)))
+
+    def set_pattern_signal(self, signal: float):
+        self._pattern_signal = max(-1.0, min(1.0, float(signal)))
+
+    def set_statistical_signal(self, signal: float):
+        self._statistical_signal = max(-1.0, min(1.0, float(signal)))
 
     def set_ml_signal(self, signal: float):
         """Set ML prediction signal from ensemble. Call before calculate_signals."""
@@ -307,6 +332,9 @@ class ProStrategy:
             "volume": round(float(last.get("volume_score", 0)), 3),
             "sentiment": round(float(last.get("sentiment_score", 0)), 3),
             "ml_prediction": round(self._ml_signal, 3),
+            "ichimoku": round(self._ichimoku_signal, 3),
+            "patterns": round(self._pattern_signal, 3),
+            "statistical": round(self._statistical_signal, 3),
             "rsi": round(float(last.get("rsi", 50)), 1),
             "adx": round(float(last.get("adx", 0)), 1),
             "macd_hist": round(float(last.get("macd_hist", 0)), 4),

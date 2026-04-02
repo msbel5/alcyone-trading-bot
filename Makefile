@@ -1,86 +1,74 @@
-# Alcyone Trading Bot — Makefile
-# Usage: make install && make train && make run
+# Alcyone Trading Bot v4 — Makefile
+# 9-layer strategy | 46 ML features | 6 scientific modules | Pi 5
 
 VENV := .venv
 PYTHON := $(VENV)/bin/python3
 PIP := $(VENV)/bin/pip
 
-.PHONY: install train backtest run stop status logs dashboard clean help
+.PHONY: help install download train train-v3 retrain backtest test test-models run start stop restart status logs dashboard clean full-setup
 
 help: ## Show this help
-	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2}'
+	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}'
 
 install: ## Install all dependencies
 	python3 -m venv $(VENV)
+	$(PIP) install --upgrade pip
 	$(PIP) install torch --index-url https://download.pytorch.org/whl/cpu
-	$(PIP) install pandas scikit-learn xgboost transformers feedparser requests cryptography
-	@echo "\n✅ Dependencies installed"
+	$(PIP) install pandas numpy scikit-learn xgboost lightgbm scipy
+	$(PIP) install transformers feedparser requests cryptography
 
-download: ## Download 8 months historical data
+download: ## Download 2 years historical data (7 coins)
 	$(PYTHON) ml/download_historical.py
-	@echo "\n✅ Historical data downloaded"
 
-train: ## Train all ML models (XGBoost + GRU)
-	$(PYTHON) ml/xgboost_model.py
-	$(PYTHON) ml/gru_model.py
-	@echo "\n✅ Models trained"
+train: train-v3 ## Train all models (default: v3 scientific)
 
-backtest: ## Run backtest on all 7 coins
-	$(PYTHON) backtester.py
+train-v3: ## Train v3: CPCV + CNN-LSTM + Stacked (~8h on Pi)
+	$(PYTHON) ml/ml_v3.py
 
-test: ## Run all component tests
-	$(PYTHON) filters.py
-	$(PYTHON) data_sources.py
-	@echo "\n✅ All tests passed"
+retrain: ## Run daily retrain (CPCV + PBO gating)
+	$(PYTHON) daily_retrain_v3.py
 
-run: ## Start the trading bot (foreground)
+backtest: ## Run v3 vs v4 backtest comparison
+	$(PYTHON) backtest_v3.py
+
+test: ## Test all 6 modules + v4 pipeline
+	$(PYTHON) ml/indicators_advanced.py
+	$(PYTHON) ml/statistical_models.py
+	$(PYTHON) ml/candlestick_patterns.py
+	$(PYTHON) ml/risk_metrics.py
+	$(PYTHON) ml/volatility_engine.py
+	$(PYTHON) ml/execution_engine.py
+	$(PYTHON) ml/data_pipeline_v4.py
+
+test-models: ## Test ML predictions for all 7 coins
+	$(PYTHON) test_all_models.py
+
+run: ## Start bot (foreground)
 	$(PYTHON) bot.py
 
-service-install: ## Install as systemd user service (24/7)
-	cp trading-bot.service ~/.config/systemd/user/
-	cp copilot-api.service ~/.config/systemd/user/ 2>/dev/null || true
-	systemctl --user daemon-reload
-	systemctl --user enable trading-bot.service
-	systemctl --user enable copilot-api.service 2>/dev/null || true
-	@echo "\n✅ Services installed. Run: make start"
-
-start: ## Start all services
+start: ## Start bot + copilot-api services
 	systemctl --user start copilot-api.service 2>/dev/null || true
-	sleep 5
+	sleep 3
 	systemctl --user start trading-bot.service
-	@echo "\n✅ Bot started. Dashboard: http://localhost:8085"
 
-stop: ## Stop the bot
+stop: ## Stop bot service
 	systemctl --user stop trading-bot.service
-	@echo "\n⏹ Bot stopped"
 
-restart: ## Restart the bot
+restart: ## Restart bot service
 	systemctl --user restart trading-bot.service
-	@echo "\n🔄 Bot restarted"
 
 status: ## Show bot status
-	@echo "=== Services ==="
-	@systemctl --user status trading-bot.service 2>&1 | head -5
-	@systemctl --user status copilot-api.service 2>&1 | head -3
-	@echo "\n=== Dashboard ==="
-	@curl -s http://localhost:8085/api/state 2>/dev/null | python3 -c '\
-		import json,sys; d=json.load(sys.stdin); \
-		print(f"PnL: $${d.get(\"total_pnl\",0):+.2f}"); \
-		print(f"Uptime: {d.get(\"uptime\",\"?\")}"); \
-		open_count=sum(1 for v in d.get("positions",{}).values() if isinstance(v,dict) and v.get("amount",0)>0); \
-		print(f"Positions: {open_count}/7")' 2>/dev/null || echo "Dashboard not available"
+	@systemctl --user status trading-bot.service 2>&1 | head -8
 
-logs: ## Tail bot logs
+logs: ## Tail live bot logs
 	tail -f logs/bot_v2.log
 
-dashboard: ## Open dashboard in browser
-	@echo "Dashboard: http://localhost:8085"
-	@echo "JSON API: http://localhost:8085/api/state"
+dashboard: ## Show dashboard URL
+	@echo "Dashboard: http://alcyone:8085"
+	@echo "JSON API:  http://alcyone:8085/api/state"
 
-clean: ## Remove logs and cached models
-	rm -f logs/*.log logs/*.jsonl
+clean: ## Remove logs and models
+	rm -f logs/*.log logs/*.json
 	rm -f ml/models/*.pt ml/models/*.pkl
-	@echo "\n🧹 Cleaned"
 
-full-setup: install download train service-install start ## Full setup from scratch
-	@echo "\n🚀 Full setup complete! Dashboard: http://localhost:8085"
+full-setup: install download train start ## Full setup from scratch

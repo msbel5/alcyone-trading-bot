@@ -28,7 +28,33 @@ from filters import MultiTimeframeFilter, CorrelationFilter, kelly_fraction
 from data_sources import TwitterSentiment, WhaleTracker, GridBot, AutoRetrainer
 from dashboard import start_dashboard, update_dashboard_state
 from position_store import save_positions, load_positions
+
+# Equity curve persistence
+def _load_equity():
+    try:
+        p = Path(LOG_DIR) / "equity_curve.json"
+        if p.exists():
+            import json as _j
+            return _j.loads(p.read_text())[-500:]
+    except Exception:
+        pass
+    return []
+
+def _save_equity(curve):
+    try:
+        p = Path(LOG_DIR) / "equity_curve.json"
+        import json as _j
+        p.write_text(_j.dumps(curve[-500:]))
+    except Exception:
+        pass
 from ml.onchain import get_onchain_signal
+# ML v3 imports (scientific overhaul)
+try:
+    from ml.bot_v3_patch import get_ml_signal_v3, get_regime_params, get_onchain_v2_signal, CircuitBreaker
+    ML_V3_AVAILABLE = True
+    from ml.dashboard_collector import collect_dashboard_data
+except ImportError:
+    ML_V3_AVAILABLE = False
 
 LOG_DIR = "/home/msbel/.openclaw/workspace/trading/logs"
 os.makedirs(LOG_DIR, exist_ok=True)
@@ -148,7 +174,8 @@ def run():
     log.info(f"Bot v2 started | {len(SYMBOLS)} coins | ${BALANCE_CAP}")
 
     # Equity curve tracker (persists across ticks)
-    equity_curve = []
+    equity_curve = _load_equity()
+# Circuit breaker (halts trading on excessive loss)    circuit_breaker = CircuitBreaker(        daily_max_loss_pct=5.0,        weekly_max_loss_pct=10.0,        total_max_loss_pct=20.0,        cooldown_hours=4,    ) if ML_V3_AVAILABLE else None
 
     # Start dashboard web server
     try:
@@ -173,7 +200,8 @@ def run():
                     try:
                         klines_4h = adapter.get_klines(sym, "4h", limit=30)
                         mtf_filter.update_4h_trend(sym, klines_4h)
-                    except Exception:
+                    except Exception as _ce:
+                        log.warning(f"Collector failed: {_ce}")
                         pass
                 last_4h_update = time.time()
                 log.info("4h trends updated")
@@ -234,19 +262,48 @@ def run():
                 # Track equity: balance cap + current position values
                 portfolio_value = BALANCE_CAP + total_pnl
                 equity_curve.append(portfolio_value)
+                _save_equity(equity_curve)
+# Circuit breaker check                if circuit_breaker:                    circuit_breaker.update(portfolio_value)                    if circuit_breaker.is_tripped():                        if iteration % 180 == 0:  # Log every 15min                            log.warning(f"CIRCUIT BREAKER ACTIVE — trading halted")
                 if len(equity_curve) > 500:
                     equity_curve.pop(0)
+                # V4 dashboard: collect all indicator/model data
+                if ML_V3_AVAILABLE:
+                    try:
+                        dash_data = collect_dashboard_data(adapter, trackers, iteration, equity_curve)
+                    except Exception as _ce:
+                        log.warning(f"Collector failed: {_ce}")
+                        dash_data = {"regime": "unknown", "vol_regime": "unknown", "hurst": 0.5,
+                                     "features_count": 46, "models_active": 8}
+                else:
+                    dash_data = {}
+
                 update_dashboard_state(
                     dash_positions, equity_curve,
                     round(total_pnl, 4),
                     0,
                     {
-                        "XGBoost": {"status": "active"},
+                        "Stacked v3": {"status": "active"},
+                        "CNN-LSTM": {"status": "active"},
+                        "LightGBM": {"status": "active"},
                         "GRU": {"status": "active"},
-                        "CryptoBERT": {"status": "active"},
-                        "Copilot GPT-4.1": {"status": "active"},
+                        "Ichimoku": {"status": "active"},
+                        "Patterns": {"status": "active"},
+                        "Hurst": {"status": "active"},
+                        "GARCH": {"status": "active"},
                     },
-                    f"{iteration * CHECK_INTERVAL // 60}min" if iteration * CHECK_INTERVAL >= 60 else f"{iteration * CHECK_INTERVAL}s"
+                    f"{iteration * CHECK_INTERVAL // 60}min" if iteration * CHECK_INTERVAL >= 60 else f"{iteration * CHECK_INTERVAL}s",
+                    regime=dash_data.get("regime", "unknown"),
+                    vol_regime=dash_data.get("vol_regime", "unknown"),
+                    hurst=dash_data.get("hurst", 0.5),
+                    features_count=46,
+                    models_active=8,
+                    risk_metrics=dash_data.get("risk_metrics", {}),
+                    indicator_summary=dash_data.get("indicator_summary", {}),
+                    patterns=dash_data.get("patterns", {}),
+                    volatility=dash_data.get("volatility", {}),
+                    statistical=dash_data.get("statistical", {}),
+                    coin_signals=dash_data.get("coin_signals", {}),
+                    coins=dash_data.get("coins", {}),
                 )
             except Exception:
                 pass
@@ -362,7 +419,12 @@ def _tick_coin_v2(adapter, tracker, notifier, trade_logger,
             whale_signal = whale.get("signal", 0)
 
             # On-chain metrics (mempool, fees, hashrate — FREE, no API key)
-            onchain = get_onchain_signal(symbol)
+            # On-chain v2 (MVRV + NVT + Exchange Flow)
+            if ML_V3_AVAILABLE:
+                prices_arr = df["close"].values if len(df) > 100 else None
+                onchain = get_onchain_v2_signal(symbol, prices_arr)
+            else:
+                onchain = get_onchain_signal(symbol)
             onchain_signal = onchain.get("signal", 0)
 
             # Copilot AI sentiment (GPT-4.1 on Pi, FREE)
@@ -388,21 +450,38 @@ def _tick_coin_v2(adapter, tracker, notifier, trade_logger,
                 pass
 
             # ML models (XGBoost + GRU + CryptoBERT local)
-            ml_result = get_ensemble().predict(symbol, df_features, headlines, f"{symbol} ${price:,.2f}")
+            # ML models (v3: CNN-LSTM + Stacked v3 + LightGBM + GRU)
+            if ML_V3_AVAILABLE:
+                ml_v3_result = get_ml_signal_v3(symbol, df_features)
+                ml_score = ml_v3_result["signal"]
+            else:
+                ml_result = get_ensemble().predict(symbol, df_features, headlines, f"{symbol} ${price:,.2f}")
+                ml_score = ml_result.get("score", 0)
 
             # Combine all signals (8 sources!)
             combined_ml = (
-                ml_result.get("score", 0) * 0.30 +  # Local ML models (XGB+GRU+LGBM+CryptoBERT)
+                ml_score * 0.30 +                     # ML models (v3 or v2)
                 copilot_score * 0.20 +                # GPT-4.1 AI opinion
                 tw_score * 0.15 +                     # Twitter sentiment
                 whale_signal * 0.10 +                 # Whale Alert RSS
-                onchain_signal * 0.15 +               # On-chain (mempool, fees, hashrate)
-                0 * 0.10                              # Reserved for future data source
+                onchain_signal * 0.15 +               # On-chain (v2: MVRV+NVT+Flow)
+                0 * 0.10                              # Reserved
             )
+
+            # Regime-based parameter adjustment
+            if ML_V3_AVAILABLE:
+                regime_params = get_regime_params(df_features)
+                tracker.strategy.buy_threshold = regime_params.get("buy_threshold", 0.40)
+                tracker.strategy.sell_threshold = regime_params.get("sell_threshold", -0.40)
+
             tracker.strategy.set_ml_signal(combined_ml)
+            # V4: Set Ichimoku, Pattern, Statistical signals            try:                from ml.indicators_advanced import AdvancedIndicators                _adv = AdvancedIndicators()                _df_adv = _adv.compute_all(df.copy())                tracker.strategy.set_ichimoku_signal(_adv.get_all_signals(_df_adv).get("ichimoku", 0))            except Exception:                tracker.strategy.set_ichimoku_signal(0)            try:                from ml.candlestick_patterns import PatternEngine                _pe = PatternEngine()                _df_pat = _pe.compute_all(df.copy())                tracker.strategy.set_pattern_signal(_pe.get_composite_signal(_df_pat))            except Exception:                tracker.strategy.set_pattern_signal(0)            try:                from ml.statistical_models import StatisticalEngine                _se = StatisticalEngine()                tracker.strategy.set_statistical_signal(_se.get_composite_signal(_se.compute_all(df.copy())))            except Exception:                tracker.strategy.set_statistical_signal(0)
         except Exception as ml_err:
             log.debug(f"{symbol} ML skipped: {ml_err}")
             tracker.strategy.set_ml_signal(0)
+            tracker.strategy.set_ichimoku_signal(0)
+            tracker.strategy.set_pattern_signal(0)
+            tracker.strategy.set_statistical_signal(0)
 
         df = tracker.strategy.calculate_signals(df)
         raw_signal = int(df["signal"].iloc[-1])

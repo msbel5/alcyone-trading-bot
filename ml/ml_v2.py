@@ -171,7 +171,7 @@ def predict_lightgbm(symbol: str, recent_df: pd.DataFrame, feature_cols: list) -
     """Predict with LightGBM."""
     save_path = MODEL_DIR / f"lgbm_{symbol.lower()}.pkl"
     if not save_path.exists():
-        return {"signal": 0, "confidence": 0, "error": "model not found"}
+        return {"signal": 0, "confidence": 0, "probs": {"down": 0.33, "flat": 0.34, "up": 0.33}, "error": "model not found"}
 
     with open(save_path, "rb") as f:
         data = pickle.load(f)
@@ -275,11 +275,17 @@ def predict_stacked(symbol: str, recent_df: pd.DataFrame, feature_cols: list) ->
 
     if lgbm_path.exists():
         with open(lgbm_path, "rb") as f:
-            lgbm_probs = pickle.load(f)["model"].predict_proba(X)
+            lgbm_data = pickle.load(f)
+        lgbm_cols = lgbm_data.get("feature_cols", cols)
+        X_lgbm = recent_df[lgbm_cols].fillna(0).values[-1:]
+        lgbm_probs = lgbm_data["model"].predict_proba(X_lgbm)
 
     if xgb_path.exists():
         with open(xgb_path, "rb") as f:
-            xgb_probs = pickle.load(f)["model"].predict_proba(X)
+            xgb_data = pickle.load(f)
+        xgb_cols = xgb_data.get("feature_cols", cols)
+        X_xgb = recent_df[xgb_cols].fillna(0).values[-1:]
+        xgb_probs = xgb_data["model"].predict_proba(X_xgb)
 
     stacked = np.hstack([lgbm_probs, xgb_probs])
     probs = meta.predict_proba(stacked)[0]
