@@ -44,8 +44,8 @@ def add_features_v3(df: pd.DataFrame) -> pd.DataFrame:
 
     # MVRV Z-Score approximation (rolling mean as realized price proxy)
     lookback_365d = 365 * 24
-    realized = pd.Series(close).rolling(min(lookback_365d, len(close)), min_periods=100).mean()
-    std_price = pd.Series(close).rolling(min(lookback_365d, len(close)), min_periods=100).std()
+    realized = pd.Series(close).rolling(min(lookback_365d, len(close)), min_periods=10).mean()
+    std_price = pd.Series(close).rolling(min(lookback_365d, len(close)), min_periods=10).std()
     std_price = std_price.replace(0, np.nan)
     df["mvrv_zscore"] = ((close - realized.values) / std_price.values)
     df["mvrv_zscore"] = df["mvrv_zscore"].clip(-4, 6).fillna(0)
@@ -57,8 +57,8 @@ def add_features_v3(df: pd.DataFrame) -> pd.DataFrame:
     df["nvt_approx"] = (close / vol_ma_7d.values)
     df["nvt_approx"] = df["nvt_approx"].fillna(0)
     # Normalize: z-score of NVT
-    nvt_mean = df["nvt_approx"].rolling(720, min_periods=100).mean()
-    nvt_std = df["nvt_approx"].rolling(720, min_periods=100).std().replace(0, 1)
+    nvt_mean = df["nvt_approx"].rolling(720, min_periods=10).mean()
+    nvt_std = df["nvt_approx"].rolling(720, min_periods=10).std().replace(0, 1)
     df["nvt_zscore"] = ((df["nvt_approx"] - nvt_mean) / nvt_std).clip(-3, 3).fillna(0)
 
     # Exchange flow proxy: volume spike relative to 30-day mean
@@ -740,8 +740,8 @@ class RegimeDetector:
         """Get strategy parameter adjustments for the detected regime."""
         if regime == self.TRENDING:
             return {
-                "buy_threshold": 0.30,      # Lower threshold → more trades
-                "sell_threshold": -0.30,
+                "buy_threshold": 0.22,      # 9-layer adjusted → more trades
+                "sell_threshold": -0.22,
                 "weight_trend": 0.30,        # Increase trend weight
                 "weight_momentum": 0.25,
                 "weight_ml": 0.20,
@@ -751,8 +751,8 @@ class RegimeDetector:
             }
         elif regime == self.VOLATILE:
             return {
-                "buy_threshold": 0.55,       # High threshold → only strong signals
-                "sell_threshold": -0.55,
+                "buy_threshold": 0.40,       # 9-layer adjusted → only strong signals
+                "sell_threshold": -0.40,
                 "weight_trend": 0.15,
                 "weight_momentum": 0.15,
                 "weight_ml": 0.25,
@@ -762,8 +762,8 @@ class RegimeDetector:
             }
         else:  # SIDEWAYS
             return {
-                "buy_threshold": 0.45,       # Medium threshold
-                "sell_threshold": -0.45,
+                "buy_threshold": 0.30,       # 9-layer adjusted
+                "sell_threshold": -0.30,
                 "weight_trend": 0.15,
                 "weight_momentum": 0.20,
                 "weight_ml": 0.20,

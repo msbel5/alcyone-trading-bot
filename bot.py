@@ -475,9 +475,29 @@ def _tick_coin_v2(adapter, tracker, notifier, trade_logger,
                 tracker.strategy.sell_threshold = regime_params.get("sell_threshold", -0.40)
 
             tracker.strategy.set_ml_signal(combined_ml)
-            # V4: Set Ichimoku, Pattern, Statistical signals            try:                from ml.indicators_advanced import AdvancedIndicators                _adv = AdvancedIndicators()                _df_adv = _adv.compute_all(df.copy())                tracker.strategy.set_ichimoku_signal(_adv.get_all_signals(_df_adv).get("ichimoku", 0))            except Exception:                tracker.strategy.set_ichimoku_signal(0)            try:                from ml.candlestick_patterns import PatternEngine                _pe = PatternEngine()                _df_pat = _pe.compute_all(df.copy())                tracker.strategy.set_pattern_signal(_pe.get_composite_signal(_df_pat))            except Exception:                tracker.strategy.set_pattern_signal(0)            try:                from ml.statistical_models import StatisticalEngine                _se = StatisticalEngine()                tracker.strategy.set_statistical_signal(_se.get_composite_signal(_se.compute_all(df.copy())))            except Exception:                tracker.strategy.set_statistical_signal(0)
+            # V4: Set Ichimoku, Pattern, Statistical signals
+            try:
+                from ml.indicators_advanced import AdvancedIndicators
+                _adv = AdvancedIndicators()
+                _df_adv = _adv.compute_all(df.copy())
+                tracker.strategy.set_ichimoku_signal(_adv.get_all_signals(_df_adv).get("ichimoku", 0))
+            except Exception:
+                tracker.strategy.set_ichimoku_signal(0)
+            try:
+                from ml.candlestick_patterns import PatternEngine
+                _pe = PatternEngine()
+                _df_pat = _pe.compute_all(df.copy())
+                tracker.strategy.set_pattern_signal(_pe.get_composite_signal(_df_pat))
+            except Exception:
+                tracker.strategy.set_pattern_signal(0)
+            try:
+                from ml.statistical_models import StatisticalEngine
+                _se = StatisticalEngine()
+                tracker.strategy.set_statistical_signal(_se.get_composite_signal(_se.compute_all(df.copy())))
+            except Exception:
+                tracker.strategy.set_statistical_signal(0)
         except Exception as ml_err:
-            log.debug(f"{symbol} ML skipped: {ml_err}")
+            log.warning(f"{symbol} ML FAILED: {ml_err}")
             tracker.strategy.set_ml_signal(0)
             tracker.strategy.set_ichimoku_signal(0)
             tracker.strategy.set_pattern_signal(0)
@@ -485,6 +505,9 @@ def _tick_coin_v2(adapter, tracker, notifier, trade_logger,
 
         df = tracker.strategy.calculate_signals(df)
         raw_signal = int(df["signal"].iloc[-1])
+        if True:  # Log signal every ~60 ticks
+            comp = float(df["composite"].iloc[-1]) if "composite" in df.columns else 0
+            log.info(f"{symbol} sig={raw_signal} comp={comp:.3f} th={tracker.strategy.buy_threshold:.2f} ml={tracker.strategy._ml_signal:.2f} ich={tracker.strategy._ichimoku_signal:.2f} pat={tracker.strategy._pattern_signal:.2f} stat={tracker.strategy._statistical_signal:.2f}")
         rsi = float(df["rsi"].iloc[-1])
         adx = float(df["adx"].iloc[-1])
 

@@ -38,7 +38,7 @@ class ProStrategy:
                  weight_ichimoku=0.10, weight_patterns=0.07,
                  weight_statistical=0.07,
                  # Thresholds
-                 buy_threshold=0.40, sell_threshold=-0.40):
+                 buy_threshold=0.25, sell_threshold=-0.25):
         # Trend params
         self.ema_fast = ema_fast
         self.ema_slow = ema_slow
